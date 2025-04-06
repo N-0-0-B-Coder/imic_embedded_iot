@@ -15,7 +15,7 @@
 ### Required services
 - IAM (set up user/role with right permissions)
 - IoT Core (MQTT)
-- Lambda (BE handlers fpr provision, mqtt data)
+- Lambda (BE handlers for provision, mqtt data)
 - Dynamodb (Data storage)
 - API Gateway (API handler for Lambda functions)
 - Cloudwatch (Logging)
