@@ -1,5 +1,26 @@
 # MQTT Message Format
-### XYZ format
+
+## Hardware
+- ESP32 Devkit
+- MPU6500
+
+## SDK
+- ESP32-IDF required for application building
+
+## Language
+- C
+- Python with **boto3** and **json** required
+
+## AWS
+### Required services
+- IAM (set up user/role with right permissions)
+- IoT Core (MQTT)
+- Lambda (BE handlers fpr provision, mqtt data)
+- Dynamodb (Data storage)
+- API Gateway (API handler for Lambda functions)
+- Cloudwatch (Logging)
+
+### Data example format for MQTT Data Lambda Function of XYZ value case
 ```json
 {
   "created_at": 1703865660,
@@ -24,7 +45,7 @@
 }
 ```
 
-### Normal value format
+### Data example format for MQTT Data Lambda Function of normal value case
 ```json
 {
   "created_at": 1703865660,
