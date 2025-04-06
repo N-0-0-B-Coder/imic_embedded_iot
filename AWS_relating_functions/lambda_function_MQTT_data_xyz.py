@@ -74,15 +74,23 @@ def lambda_handler(event, context):
         }
 
         # Add all sensor data to the item
+        # Add all sensor data to the item
         for entry in data_entries:
             sensor_name = entry.get("name")
+            sensor_value = entry.get("value")
             if sensor_name:
-                item[f"{sensor_name}_timestamp"] = entry.get("timestamp", created_at)  # Use entry timestamp or created_at
-                item[f"{sensor_name}_value"] = entry.get("value")
+                ts = entry.get("timestamp", created_at)
+                item[f"{sensor_name}_timestamp"] = ts
                 item[f"{sensor_name}_unit"] = entry.get("unit", "")
-                item[f"{sensor_name}_series"] = entry.get("series", "")
 
-                
+                if isinstance(sensor_value, dict):  # Vector data like x, y, z
+                    for axis in ["x", "y", "z"]:
+                        item[f"{sensor_name}_{axis}"] = sensor_value.get(axis)
+                else:
+                    item[f"{sensor_name}_value"] = sensor_value
+
+        # Convert from float to decimal since dynamodb don't support float type
+        item = replace_floats(item)
         # Store the combined item in DynamoDB
         table.put_item(Item=item)
 
