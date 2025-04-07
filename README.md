@@ -20,7 +20,9 @@
 - API Gateway (API handler for Lambda functions)
 - Cloudwatch (Logging)
 
-### Data example format for MQTT Data Lambda Function of XYZ value case
+### MQTT data example format
+
+- ***For XYZ sensor value case***
 ```json
 {
   "created_at": 1703865660,
@@ -45,7 +47,7 @@
 }
 ```
 
-### Data example format for MQTT Data Lambda Function of normal value case
+- ***For velocity and frequency value case***
 ```json
 {
   "created_at": 1703865660,
