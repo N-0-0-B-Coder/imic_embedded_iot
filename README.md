@@ -55,16 +55,17 @@
   },
   "data": [
     {
-      "name": "temperature",
+      "name": "velocity",
       "value": "25.3",
-      "unit": "celsius",
-      "series": "C",
+      "unit": "km/h",
+      "series": "v",
       "timestamp": 1703865600
     },
     {
-      "name": "humidity",
+      "name": "frequency",
       "value": "54",
-      "unit": "%",
+      "unit": "Hz",
+      "series": "f",
       "timestamp": 1703865650
     }
   ]
