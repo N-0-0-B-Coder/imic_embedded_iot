@@ -1,7 +1,7 @@
-# MQTT Message Format
+# Velocity and Vibration Monitoring Device
 
 ## Hardware
-- ESP32 Devkit
+- ESP32
 - MPU6500
 
 ## SDK
