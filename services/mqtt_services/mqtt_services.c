@@ -1,19 +1,17 @@
-/* MQTT Mutual Authentication Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
 #include <stddef.h>
 #include <string.h>
+#include "cJSON.h"
+
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
+#include "esp_sntp.h"
+#include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -24,7 +22,6 @@
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
 
-#include "esp_log.h"
 #include "mqtt_client.h"
 
 #include "http_services.h"
@@ -34,7 +31,9 @@ bool mqtt_connected = false;
 esp_mqtt_client_handle_t client;
 char *mqtt_root_ca = NULL,
      *mqtt_device_cert = NULL,
-     *mqtt_private_key = NULL;
+     *mqtt_private_key = NULL,
+     *device_id = "ESP32-001",
+     *firmware_version = "1.0.0";
 
 
 static void log_error_if_nonzero(const char *message, int error_code)
@@ -99,20 +98,96 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
-void publish_random_data() {
-    char payload[128];
+void publish_json_data() {
+    char *json_string = NULL;
 
     for (;;) {
         if (mqtt_connected) {
-            int temp = rand() % 50;  // Generate random temperature (0-50°C)
-            snprintf(payload, sizeof(payload), "{\"temperature\": %d}", temp);
-            esp_mqtt_client_publish(client, "/topic/data", payload, 0, 1, 0);
-            ESP_LOGI(TAG, "Published: %s", payload);
+            // Create the root JSON object
+            cJSON *root = cJSON_CreateObject();
+            if (root == NULL) {
+                ESP_LOGE(TAG, "Failed to create root JSON object");
+                vTaskDelay(pdMS_TO_TICKS(1000)); // Delay 1 seconds
+                continue;
+            }
+
+            // Add "created_at" field
+            time_t now = time(NULL);
+            cJSON_AddNumberToObject(root, "created_at", now);
+
+            // Add "device" object
+            cJSON *device = cJSON_CreateObject();
+            if (device == NULL) {
+                ESP_LOGE(TAG, "Failed to create device JSON object");
+                cJSON_Delete(root);
+                vTaskDelay(pdMS_TO_TICKS(1000)); // Delay 1 seconds
+                continue;
+            }
+            cJSON_AddStringToObject(device, "serial_number", device_id);
+            cJSON_AddStringToObject(device, "firmware_version", firmware_version);
+            cJSON_AddItemToObject(root, "device", device);
+
+            // Add "data" array
+            cJSON *data_array = cJSON_CreateArray();
+            if (data_array == NULL) {
+                ESP_LOGE(TAG, "Failed to create data JSON array");
+                cJSON_Delete(root);
+                vTaskDelay(pdMS_TO_TICKS(1000)); // Delay 100 seconds
+                continue;
+            }
+
+            // Add first sensor data (velocity)
+            cJSON *velocity = cJSON_CreateObject();
+            if (velocity != NULL) {
+                float random_value = ((float)rand() / RAND_MAX) * 100.0f; // Random value between 0.0 and 99.9
+                char random_value_str[10];
+                snprintf(random_value_str, sizeof(random_value_str), "%.1f", random_value);
+                cJSON_AddStringToObject(velocity, "name", "velocity");
+                cJSON_AddStringToObject(velocity, "value", random_value_str);
+                cJSON_AddStringToObject(velocity, "unit", "km/h");
+                cJSON_AddStringToObject(velocity, "series", "v");
+                cJSON_AddNumberToObject(velocity, "timestamp", now);
+                cJSON_AddItemToArray(data_array, velocity);
+            }
+
+            // Add second sensor data (frequency)
+            cJSON *frequency = cJSON_CreateObject();
+            if (frequency != NULL) {
+                int16_t random_value = rand() % 100; // Random value between 0 and 99
+                char random_value_str[10];
+                snprintf(random_value_str, sizeof(random_value_str), "%d", random_value);
+                cJSON_AddStringToObject(frequency, "name", "frequency");
+                cJSON_AddStringToObject(frequency, "value", random_value_str);
+                cJSON_AddStringToObject(frequency, "unit", "Hz");
+                cJSON_AddStringToObject(frequency, "series", "f");
+                cJSON_AddNumberToObject(frequency, "timestamp", now);
+                cJSON_AddItemToArray(data_array, frequency);
+            }
+
+            cJSON_AddItemToObject(root, "data", data_array);
+
+            // Convert JSON object to string
+            json_string = cJSON_PrintUnformatted(root);
+            if (json_string == NULL) {
+                ESP_LOGE(TAG, "Failed to print JSON object");
+                cJSON_Delete(root);
+                vTaskDelay(pdMS_TO_TICKS(1000)); // Delay 100 seconds
+                continue;
+            }
+
+            // Publish the JSON string via MQTT
+            esp_mqtt_client_publish(client, "/topic/data", json_string, 0, 1, 0);
+            ESP_LOGI(TAG, "Published JSON: %s", json_string);
+
+            // Free allocated memory
+            cJSON_Delete(root);
+            free(json_string);
         } else {
             ESP_LOGW(TAG, "MQTT client is not connected. Skipping publish.");
         }
 
-        vTaskDelay(100000 / portTICK_PERIOD_MS); // Publish every 100 seconds
+        // Delay 100 seconds
+        vTaskDelay(pdMS_TO_TICKS(100000));
     }
 }
 
@@ -129,8 +204,36 @@ void mqtt_ping_task(void *arg) {
     }
 }
 
+void initialize_sntp(void) {
+    ESP_LOGI("SNTP", "Initializing SNTP");
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org"); // Use the default NTP server
+    esp_sntp_init();
+
+    // Wait for time to be set
+    time_t now = 0;
+    struct tm timeinfo = { 0 };
+    int retry = 0;
+    const int retry_count = 10;
+    while (timeinfo.tm_year < (1970 - 1900) && ++retry < retry_count) {
+        ESP_LOGI("SNTP", "Waiting for system time to be set... (%d/%d)", retry, retry_count);
+        vTaskDelay(pdMS_TO_TICKS(2000)); // Wait 2 seconds
+        time(&now);
+        localtime_r(&now, &timeinfo);
+    }
+
+    if (timeinfo.tm_year < (1970 - 1900)) {
+        ESP_LOGE("SNTP", "Failed to synchronize time");
+    } else {
+        ESP_LOGI("SNTP", "System time synchronized: %s", asctime(&timeinfo));
+    }
+}
+
 static void mqtt_app_start(void) {
     srand(time(NULL));
+
+    // Initialize SNTP to synchronize time
+    initialize_sntp();
 
     static SemaphoreHandle_t cert_mutex = NULL;
 
@@ -179,7 +282,7 @@ static void mqtt_app_start(void) {
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
-    xTaskCreate(publish_random_data, "mqtt_publish_task", 2048, NULL, 5, NULL);
+    xTaskCreate(publish_json_data, "mqtt_publish_task", 2048, NULL, 5, NULL);
     //xTaskCreate(mqtt_ping_task, "mqtt_ping_task", 4096, NULL, 5, NULL);
 }
 
