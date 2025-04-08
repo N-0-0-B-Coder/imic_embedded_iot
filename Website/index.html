@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IoT Sensor Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>Velocity & Frequency Monitor</h1>
+
+  <div class="controls">
+    <label for="deviceId">Device ID:</label>
+    <input type="text" id="deviceId" placeholder="Device ID" />
+
+    <label for="timeframe">Timeframe:</label>
+    <select id="timeframe">
+      <option value="1h">Last 1 Hour</option>
+      <option value="12h">Last 12 Hours</option>
+      <option value="1d">Last 1 Day</option>
+    </select>
+
+    <button onclick="fetchAndRender()">Refresh</button>
+  </div>
+
+  <div class="charts">
+    <h2>Velocity</h2>
+    <canvas id="velocityChart" height="100"></canvas>
+
+    <h2>Frequency</h2>
+    <canvas id="frequencyChart" height="100"></canvas>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
