@@ -1,6 +1,8 @@
 const API_URL = "https://h73hgmob52.execute-api.ap-southeast-1.amazonaws.com/sensor-data";
 
-let velocityChart, frequencyChart;
+// Chart instances
+let velocityChartInstance = null;
+let frequencyChartInstance = null;
 
 function fetchAndRender() {
   const deviceId = document.getElementById("deviceId").value.trim();
@@ -21,19 +23,24 @@ function fetchAndRender() {
         return;
       }
 
+      if (data.length === 0) {
+        alert("No data available for this device and timeframe.");
+        return;
+      }
+
       const timestamps = data.map(d =>
         new Date(d.timestamp * 1000).toLocaleString()
       );
+
       const velocityValues = data.map(d => parseFloat(d.velocity_value));
       const frequencyValues = data.map(d => parseFloat(d.frequency_value));
 
-      renderChart("velocityChart", "Velocity (km/h)", timestamps, velocityValues, "blue", velocityChart => {
-        velocityChart = velocityChart;
-      });
+      const velocityUnit = data[0].velocity_unit || "km/h";
+      const frequencyUnit = data[0].frequency_unit || "Hz";
 
-      renderChart("frequencyChart", "Frequency (Hz)", timestamps, frequencyValues, "green", frequencyChart => {
-        frequencyChart = frequencyChart;
-      });
+      // Render both charts with instance tracking
+      velocityChartInstance = renderChart("velocityChart", "Velocity", timestamps, velocityValues, velocityUnit, "blue", velocityChartInstance);
+      frequencyChartInstance = renderChart("frequencyChart", "Frequency", timestamps, frequencyValues, frequencyUnit, "green", frequencyChartInstance);
     })
     .catch(err => {
       console.error("Fetch error:", err);
@@ -41,20 +48,20 @@ function fetchAndRender() {
     });
 }
 
-function renderChart(canvasId, label, labels, data, color, onInit) {
+function renderChart(canvasId, label, labels, data, unit, color, existingChart) {
   const ctx = document.getElementById(canvasId).getContext("2d");
 
-  // Destroy previous chart if exists
-  if (canvasId === "velocityChart" && velocityChart) velocityChart.destroy();
-  if (canvasId === "frequencyChart" && frequencyChart) frequencyChart.destroy();
+  if (existingChart) {
+    existingChart.destroy();
+  }
 
-  const chart = new Chart(ctx, {
+  return new Chart(ctx, {
     type: "line",
     data: {
       labels,
       datasets: [
         {
-          label,
+          label: `${label} (${unit})`,
           data,
           fill: false,
           borderColor: color,
@@ -66,16 +73,24 @@ function renderChart(canvasId, label, labels, data, color, onInit) {
       responsive: true,
       scales: {
         x: {
+          title: {
+            display: true,
+            text: "Time"
+          },
           ticks: {
             maxRotation: 90,
             minRotation: 45,
             autoSkip: true,
             maxTicksLimit: 15
           }
+        },
+        y: {
+          title: {
+            display: true,
+            text: unit
+          }
         }
       }
     }
   });
-
-  onInit(chart);
 }
