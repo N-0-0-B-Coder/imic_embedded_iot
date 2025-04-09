@@ -21,7 +21,7 @@ body {
   
   .controls label {
     font-weight: bold;
-    margin: auto;
+    margin: auto 0;
   }
   
   .controls input,
