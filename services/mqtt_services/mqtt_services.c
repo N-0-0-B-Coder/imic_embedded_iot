@@ -282,8 +282,8 @@ static void mqtt_app_start(void) {
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
-    xTaskCreate(publish_json_data, "mqtt_publish_task", 2048, NULL, 5, NULL);
-    //xTaskCreate(mqtt_ping_task, "mqtt_ping_task", 4096, NULL, 5, NULL);
+    //xTaskCreate(publish_json_data, "mqtt_publish_task", 2048, NULL, 5, NULL);
+    //xTaskCreate(mqtt_ping_task, "mqtt_ping_task", 1024, NULL, 5, NULL);
 }
 
 void mqtt_task(void *arg) {
