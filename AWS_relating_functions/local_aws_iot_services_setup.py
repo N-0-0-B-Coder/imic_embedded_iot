@@ -4,9 +4,13 @@ from botocore.exceptions import ClientError
 # Configuration
 AWS_IDENTITY = "343218212042"
 AWS_REGION = "ap-southeast-1"
-LAMBDA_FUNCTION_NAME = "IoT_MQTT_Sensor_Data"
-IOT_RULE_NAME = "IoT_MQTT_Data_To_DynamoDB"
-IOT_TOPIC = "/topic/data"
+LAMBDA_FUNCTION_NAME1 = "IoT_MQTT_Sensor_Data"
+LAMBDA_FUNCTION_NAME2 = "IoT_MQTT_OTA"
+IOT_RULE_NAME1 = "IoT_MQTT_Data_To_DynamoDB"
+IOT_RULE_NAME2 = "IoT_MQTT_OTA"
+IOT_TOPIC1 = "/topic/data"
+IOT_TOPIC2 = "/topic/ota"
+IOT_TOPIC = f"{IOT_TOPIC1} || {IOT_TOPIC2}"  # Combine topics for the rule
 DYNAMODB_TABLE_PROVISIONING_NAME = "IoT_Provision_Table"
 DYNAMODB_TABLE_DATA_NAME = "IoT_Sensor_Data"
 
@@ -66,57 +70,67 @@ def create_dynamodb_table():
 
 def add_lambda_permission():
     try:
-        lambda_client.add_permission(
-            FunctionName=LAMBDA_FUNCTION_NAME,
-            StatementId="AllowIoTInvoke",
-            Action="lambda:InvokeFunction",
-            Principal="iot.amazonaws.com",
-            SourceArn=f"arn:aws:iot:{AWS_REGION}:{AWS_IDENTITY}:rule/{IOT_RULE_NAME}"  # Replace YOUR_ACCOUNT_ID
-        )
-        print("Lambda invoke permission added for IoT Core.")
+        rule_names = [IOT_RULE_NAME1, IOT_RULE_NAME2]
+        lambda_functions = [LAMBDA_FUNCTION_NAME1, LAMBDA_FUNCTION_NAME2]
+        
+        for rule_name, lambda_function in zip(rule_names, lambda_functions):
+            lambda_client.add_permission(
+                FunctionName=lambda_function,
+                StatementId=f"AllowIoTInvoke-{rule_name}",
+                Action="lambda:InvokeFunction",
+                Principal="iot.amazonaws.com",
+                SourceArn=f"arn:aws:iot:{AWS_REGION}:{AWS_IDENTITY}:rule/{rule_name}"
+            )
+            print(f"Lambda invoke permission added for IoT Core rule '{rule_name}' and Lambda function '{lambda_function}'.")
     except ClientError as e:
         if e.response["Error"]["Code"] == "ResourceConflictException":
             print("Permission already exists.")
         else:
             raise
 
-def create_iot_rule():
+def create_iot_rules():
     try:
-        # Use list_topic_rules() to check if the rule exists
+        # Use list_topic_rules() to check if the rules exist
         response = iot.list_topic_rules()
         existing_rules = [rule['ruleName'] for rule in response['rules']]
-        if IOT_RULE_NAME in existing_rules:
-            print(f"IoT rule '{IOT_RULE_NAME}' already exists.")
-            return
 
-        # If the rule does not exist, create it
-        print("Creating IoT rule...")
-        lambda_arn = lambda_client.get_function(FunctionName=LAMBDA_FUNCTION_NAME)["Configuration"]["FunctionArn"]
-        topic_rule_payload = {
-            "sql": f"SELECT * FROM '{IOT_TOPIC}'",
-            "awsIotSqlVersion": "2016-03-23",
-            "actions": [
-                {
-                    "lambda": {
+        rules = [
+            {"name": IOT_RULE_NAME1, "topic": IOT_TOPIC1, "lambda_function": LAMBDA_FUNCTION_NAME1},
+            {"name": IOT_RULE_NAME2, "topic": IOT_TOPIC2, "lambda_function": LAMBDA_FUNCTION_NAME2}
+        ]
+
+        for rule in rules:
+            if rule["name"] in existing_rules:
+                print(f"IoT rule {rule['name']} already exists.")
+            else:
+                print(f"Creating IoT rule {rule['name']}...")
+                lambda_arn = lambda_client.get_function(FunctionName=rule["lambda_function"])["Configuration"]["FunctionArn"]
+                topic_rule_payload = {
+                    "sql": f"SELECT * FROM '{rule['topic']}'",
+                    "awsIotSqlVersion": "2016-03-23",
+                    "actions": [
+                    {
+                        "lambda": {
                         "functionArn": lambda_arn
+                        }
                     }
+                    ],
+                    "ruleDisabled": False
                 }
-            ],
-            "ruleDisabled": False
-        }
-        iot.create_topic_rule(
-            ruleName=IOT_RULE_NAME,
-            topicRulePayload=topic_rule_payload
-        )
-        print(f"IoT rule '{IOT_RULE_NAME}' created successfully.")
+                iot.create_topic_rule(
+                    ruleName=rule["name"],
+                    topicRulePayload=topic_rule_payload
+                )
+                print(f"IoT rule {rule['name']} created successfully.")
+
     except ClientError as e:
         print(f"An error occurred: {e.response['Error']['Message']}")
         raise
 
 def deploy():
     create_dynamodb_table()
+    create_iot_rules()
     add_lambda_permission()
-    create_iot_rule()
 
 if __name__ == "__main__":
     deploy()

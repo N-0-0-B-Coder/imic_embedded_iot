@@ -1,6 +1,6 @@
 set(app_src mqtt_services.c)
 
-set(pri_req esp_wifi nvs_flash json tcp_transport app_update http_services mqtt)
+set(pri_req esp_wifi nvs_flash json mqtt tcp_transport http_services ota_services sleep_services)
 
 string(REPLACE "\\" "/" IDF_PATH_FIXED $ENV{IDF_PATH})
 

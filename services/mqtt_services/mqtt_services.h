@@ -5,12 +5,22 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+#include <stddef.h>
 #include <string.h>
+#include "esp_err.h"
 
-#define TAG "imic_esp32"
 
 #define AWS_BROKER_URL "mqtts://a1vqzz6hddtsqt-ats.iot.ap-southeast-1.amazonaws.com:8883"
 #define AWS_BROKER_PORT 8883
+
+#define MAX_TOPIC_LENGTH 128
+#define MAX_PAYLOAD_LENGTH 2048
+
+#define ESP_MQTT_MAXIMUM_RETRY  5
 
 #define ROOT_CA_CERTIFICATE "-----BEGIN CERTIFICATE-----\n" \
 "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n" \

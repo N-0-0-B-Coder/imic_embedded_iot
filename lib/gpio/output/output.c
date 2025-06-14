@@ -52,16 +52,14 @@ void output_task(void* arg) {
     /* Configure the peripheral according to the LED type */
     output_configure(BLINK_GPIO_DEFAULT);
 
+    gpio_set_level(BLINK_GPIO_DEFAULT, 1);
+
     for (;;) {
-        ESP_LOGI(TAG, "Turning the LED %s!", output_led_state == true ? "ON" : "OFF");
-        blink_led(BLINK_GPIO_DEFAULT);
-        /* Toggle the LED state */
-        output_led_state = !output_led_state;
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        vTaskDelay(1);
     }
 }
 
 void output_app(void)
 {
-    xTaskCreate(output_task, "output_task", 2048, NULL, 10, NULL);
+    xTaskCreate(output_task, "output_task", 2048, NULL, 7, NULL);
 }

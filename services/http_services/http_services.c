@@ -1,25 +1,27 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "http_services.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "esp_err.h"
 #include "esp_event.h"
 #include "cJSON.h"
 #include "nvs_flash.h"
 
-#include "http_services.h"
+#include "esp_partition.h"
+#include "esp_ota_ops.h"
+
 #include "mqtt_services.h"
 
-char *http_root_ca = NULL,
+static const char *TAG = "ESP32_HTTP";
+
+static char *http_root_ca = NULL,
      *http_device_cert = NULL,
      *http_private_key = NULL,
      *http_public_key = NULL;
 
-bool cert_ok = false;
+static bool cert_ok = false;
+
 
 void get_cert(char **out_root_ca, char **out_device_cert, char **out_private_key) {
     ESP_LOGI(TAG, "HTTP Root CA: %s", http_root_ca ? http_root_ca : "NULL");
@@ -36,7 +38,7 @@ void get_cert(char **out_root_ca, char **out_device_cert, char **out_private_key
     }
 }
 
-esp_err_t get_string_from_nvs(nvs_handle_t nvs_handle, const char *key, char **out_value) {
+static esp_err_t get_string_from_nvs(nvs_handle_t nvs_handle, const char *key, char **out_value) {
     size_t required_size = 0;
     esp_err_t err = nvs_get_str(nvs_handle, key, NULL, &required_size);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
@@ -98,7 +100,7 @@ esp_err_t retrieve_certs_and_keys(char **out_root_ca, char **out_device_cert, ch
 }
 
 
-esp_err_t check_key_exists(nvs_handle_t nvs_handle, const char *key) {
+static esp_err_t check_key_exists(nvs_handle_t nvs_handle, const char *key) {
     size_t required_size = 0;
     esp_err_t err = nvs_get_str(nvs_handle, key, NULL, &required_size);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
@@ -193,10 +195,11 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt) {
                 response_buffer = NULL;
                 return ret;
             }
+
             break;
         case HTTP_EVENT_ON_FINISH:
             //ESP_LOGI(TAG, "HTTP Response: %s", response_buffer);
-
+            
             // Parse JSON
             cJSON *root = cJSON_Parse(response_buffer);
             if (root == NULL) {
@@ -390,3 +393,29 @@ esp_err_t https_request(char *type) {
     return ret;
 }
 
+
+void http_task(void *pvParameters) {
+    uint8_t count = 0;
+    while (https_request("provisioning") != ESP_OK && count < 10) {
+        ESP_LOGI(TAG, "Retrying HTTPS request...");
+        vTaskDelay(pdMS_TO_TICKS(5000));  // Wait for 5 seconds before retrying
+        count++;
+    }
+
+    if (count == 10) {
+        ESP_LOGE(TAG, "Failed to retrieve certs and keys after 10 attempts.");
+    }
+
+    ESP_LOGI(TAG, "HTTP task remaining stack: %d bytes", uxTaskGetStackHighWaterMark(NULL));
+    vTaskDelete(NULL);
+}
+
+esp_err_t http_provision_service(void) {
+    BaseType_t xReturned;
+    xReturned = xTaskCreate(http_task, "http_task", 4096, NULL, 9, NULL);
+    if (xReturned != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create HTTP task");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}

@@ -1,17 +1,16 @@
-#ifndef __HTTP_SERVICES_H__
-#define __HTTP_SERVICES_H__
+#ifndef __OTA_SERVICES_H__
+#define __OTA_SERVICES_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "esp_err.h"
 
+#define OTA_API_URL "https://urk9g0gm4d.execute-api.ap-southeast-1.amazonaws.com"
 
-#define AWS_API_URL "https://urk9g0gm4d.execute-api.ap-southeast-1.amazonaws.com"
+#define OTA_MAX_RETRIES 3
 
 #define ROOT_CA_CERTIFICATE "-----BEGIN CERTIFICATE-----\n" \
 "MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF\n" \
@@ -34,13 +33,9 @@ extern "C" {
 "rqXRfboQnoZsG4q5WTP468SQvvG5\n" \
 "-----END CERTIFICATE-----\n"
 
-esp_err_t http_provision_service(void);
-esp_err_t retrieve_certs_and_keys(char **out_root_ca, char **out_device_cert, char **out_private_key);
-esp_err_t check_certs_and_keys_exist();
-void get_cert(char **out_root_ca, char **out_device_cert, char **out_private_key);
 
-#ifdef __cplusplus
-}
-#endif
+esp_err_t ota_service(char *fw_url, uint32_t expected_crc);
+esp_err_t retrieve_ca_cert(char **out_root_ca);
+esp_err_t check_ca_cert();
 
-#endif // __HTTP_SERVICES_H__
+#endif // __OTA_SERVICES_H__

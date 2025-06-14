@@ -9,6 +9,7 @@ extern "C" {
 #include "driver/gpio.h"
 
 #define INPUT_GPIO_DEFAULT 3
+#define INPUT_GPIO_BOOT 0
 
 typedef void (*input_callback_t)(uint32_t gpio_num);
 

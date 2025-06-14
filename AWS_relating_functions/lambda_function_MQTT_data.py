@@ -15,7 +15,7 @@ def check_table():
     try:
         table = dynamodb.Table(TABLE_NAME)
         table.load()  # Check if the table exists
-        print(f"Table {TABLE_NAME} already exists.")
+        #print(f"Table {TABLE_NAME} already exists.")
     except ClientError as e:
         if e.response["Error"]["Code"] == "ResourceNotFoundException":
             print(f"Table {TABLE_NAME} not found. Creating table...")
@@ -51,7 +51,7 @@ def replace_floats(obj):
 
 def lambda_handler(event, context):
     try:
-        print("Incoming event:", json.dumps(event))  # Log incoming event for debugging
+        #print("Incoming event:", json.dumps(event))  # Log incoming event for debugging
 
         check_table()
 
@@ -73,7 +73,6 @@ def lambda_handler(event, context):
             "firmware_version": firmware_version,
         }
 
-        # Add all sensor data to the item
         # Add all sensor data to the item
         for entry in data_entries:
             sensor_name = entry.get("name")

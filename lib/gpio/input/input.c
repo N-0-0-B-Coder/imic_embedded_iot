@@ -10,6 +10,8 @@
 #include "output.h"
 #include "input.h"
 
+static const char *TAG = "ESP32_INPUT";
+
 #define ESP_INTR_FLAG_DEFAULT 0
 
 //zero-initialize the config structure.
@@ -25,8 +27,12 @@ static input_callback_t input_callback = NULL;
 static uint8_t output_led_state = 0;
 
 void isr_handler(void* arg) {
-    uint32_t gpio_num = (uint32_t) arg;
-    input_callback(gpio_num);    
+    uint32_t gpio_num = (uint32_t)arg;
+    if (input_callback != NULL) {
+        input_callback(gpio_num);  // Call the callback only if it is not NULL
+    } else {
+        // Do nothing
+    }
 }
 
 void input_set_callback(void *cb) {
@@ -49,10 +55,10 @@ void input_configure(int gpio, gpio_int_type_t intr_type) {
     io_conf.mode = GPIO_MODE_INPUT;
 
     //disable pull-up mode
-    io_conf.pull_up_en = 0;
+    io_conf.pull_up_en = false;
 
     //enable pull-down mode
-    io_conf.pull_down_en = 1;
+    io_conf.pull_down_en = true;
 
     //configure GPIO with the given settings
     gpio_config(&io_conf);
@@ -66,25 +72,41 @@ void input_configure(int gpio, gpio_int_type_t intr_type) {
     //hook isr handler for specific gpio pin
     gpio_isr_handler_add(gpio, isr_handler, (void*) gpio);
 }
-void input_task(void* arg) {
-    uint32_t io_num;
+// void input_task(void *arg) {
+//     uint32_t io_num;
+//     for (;;) {
+//         if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
+//             if (output_led_state == 0) {
+//                 ESP_LOGI(TAG, "GPIO[%"PRIu32"] ON!", io_num);
+//                 gpio_set_level(2, 1);
+//             }
+//             else if (output_led_state == 1) {
+//                 ESP_LOGI(TAG, "GPIO[%"PRIu32"] OFF!", io_num);
+//                 gpio_set_level(2, 0);
+//             }
+//             output_led_state = !output_led_state;
+//         }
+//     }
+// }
+
+
+void input_task(void *arg) {
+    uint32_t level;
     for (;;) {
-        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            if (output_led_state == 0) {
-                ESP_LOGI("input", "GPIO[%"PRIu32"] ON!", io_num);
-                gpio_set_level(2, 1);
+        if (xQueueReceive(gpio_evt_queue, &level, portMAX_DELAY)) {
+            if (level == 0) {
+                ESP_LOGI(TAG, "GPIO[%"PRIu32"] LOW!", level);
+            } else if (level == 1) {
+                ESP_LOGI(TAG, "GPIO[%"PRIu32"] HIGH!", level);
             }
-            else if (output_led_state == 1) {
-                ESP_LOGI("input", "GPIO[%"PRIu32"] OFF!", io_num);
-                gpio_set_level(2, 0);
-            }
-            output_led_state = !output_led_state;
         }
     }
 }
-void input_app(void) {
-    input_configure(INPUT_GPIO_DEFAULT, GPIO_INTR_POSEDGE);
-    output_configure(2);
 
-    xTaskCreate(input_task, "input_task", 2048, NULL, 10, NULL);
+void input_app(void) {
+    //input_configure(INPUT_GPIO_DEFAULT, GPIO_INTR_POSEDGE);
+    input_configure(INPUT_GPIO_BOOT, GPIO_INTR_ANYEDGE); //GPIO_INTR_DISABLE
+    //output_configure(2);
+
+    xTaskCreate(input_task, "input_task", 2048, NULL, 6, NULL);
 }

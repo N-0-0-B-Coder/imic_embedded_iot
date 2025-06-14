@@ -1,4 +1,4 @@
-#include <string.h>
+#include "wifi_services.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -9,13 +9,15 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
+#include "output.h"
+
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
-#include "output.h"
 #include "http_services.h"
-#include "wifi_services.h"
 #include "mqtt_services.h"
+
+static const char *TAG = "ESP32_WIFI";
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -41,7 +43,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_STA_START:
-                ESP_LOGI(TAG, "WIFI_EVENT_STA_START");
+                //ESP_LOGI(TAG, "WIFI_EVENT_STA_START");
                 esp_wifi_connect();
                 break;
                 
@@ -49,7 +51,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 ESP_LOGI(TAG,"connect to the AP fail");
                 wifi_event_sta_disconnected_t* disconnected = (wifi_event_sta_disconnected_t*) event_data;
                 ESP_LOGW(TAG, "Disconnected. Reason: %d", disconnected->reason);
-                if (s_retry_num < ESP_MAXIMUM_RETRY) {
+                if (s_retry_num < ESP_WIFI_MAXIMUM_RETRY) {
                     int delay_time = (1 << s_retry_num) * 1000; // 1s, 2s, 4s, etc.
                     vTaskDelay(pdMS_TO_TICKS(delay_time));
                     ESP_LOGI(TAG, "Retrying WiFi connection...");
@@ -73,7 +75,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 break;
 
             case WIFI_EVENT_HOME_CHANNEL_CHANGE:
-                ESP_LOGI(TAG, "WIFI_EVENT_HOME_CHANNEL_CHANGE");
+                //ESP_LOGI(TAG, "WIFI_EVENT_HOME_CHANNEL_CHANGE");
+                ESP_LOGI(TAG, "Channel changed to %d", ((wifi_event_home_channel_change_t*) event_data)->new_chan);
                 break;
 
             default:
@@ -84,9 +87,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     } else if (event_base == IP_EVENT) {
         switch (event_id) {
             case IP_EVENT_STA_GOT_IP:
-                ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP");
+                //ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP");
                 ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-                ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+                ESP_LOGI(TAG, "IP Asigned:" IPSTR, IP2STR(&event->ip_info.ip));
                 s_retry_num = 0;
                 xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 
@@ -116,8 +119,8 @@ esp_err_t wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
 
-    wifi_init_config_t wifi_cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&wifi_cfg));
+    wifi_init_config_t wifi_init_cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&wifi_init_cfg));
 
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
@@ -157,7 +160,7 @@ esp_err_t wifi_init_sta(void)
     // Enable auto-reconnect
     //ESP_ERROR_CHECK(esp_wifi_set_auto_connect(true));
 
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
+    //ESP_LOGI(TAG, "wifi_init_sta finished.");
 
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
@@ -170,14 +173,13 @@ esp_err_t wifi_init_sta(void)
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
-                 ESP_WIFI_SSID, ESP_WIFI_PASS);
+        //ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", ESP_WIFI_SSID, ESP_WIFI_PASS);
         output_app();
+        ESP_LOGI(TAG, "Wifi connected successfully.");
         ret = ESP_OK;
         return ret;
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGE(TAG, "Failed to connect to SSID:%s, password:%s",
-                 ESP_WIFI_SSID, ESP_WIFI_PASS);
+        //ESP_LOGE(TAG, "Failed to connect to SSID:%s, password:%s", ESP_WIFI_SSID, ESP_WIFI_PASS);
         ESP_LOGE(TAG, "Maximum retries reached. Restarting...");
         esp_restart();
     } else {
@@ -188,25 +190,27 @@ esp_err_t wifi_init_sta(void)
 
 esp_err_t wifi_main(void)
 {
-    //Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    esp_err_t ret;
 
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+    //Initialize NVS
+    // ret = nvs_flash_init();
+    // if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    //   ESP_ERROR_CHECK(nvs_flash_erase());
+    //   ret = nvs_flash_init();
+    // }
+    // ESP_ERROR_CHECK(ret);
+    // ESP_LOGI(TAG, "NVS initialized successfully.");
+
+    //ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
 
     uint8_t mac[6];
-    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    ret = esp_wifi_get_mac(WIFI_IF_STA, mac);
     ESP_LOGI(TAG, "Esp MAC: %s" , mac2str(mac));
 
     if(wifi_init_sta() == ESP_OK) {
         ret = ESP_OK;
         return ret;
     }
-    ret = ESP_FAIL;
     return ret;
 }
 
@@ -223,15 +227,9 @@ void wifi_task(void *arg) {
     esp_err_t err = check_certs_and_keys_exist();
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Certs and keys not found in NVS. Proceeding to retrieve them.");
-        uint8_t count = 0;
-        while (https_request("provisioning") != ESP_OK && count < 10) {
-            ESP_LOGI(TAG, "Retrying HTTPS request...");
+        while (http_provision_service() != ESP_OK) {
+            ESP_LOGI(TAG, "Retrying HTTP connection...");
             vTaskDelay(pdMS_TO_TICKS(5000));  // Wait for 5 second before retrying
-            count++;
-        }
-
-        if (count == 10) {
-            ESP_LOGE(TAG, "Failed to retrieve certs and keys after 10 attempts. Exiting Wi-Fi task.");
         }
     } else {
         ESP_LOGI(TAG, "Certs and keys found in NVS. Proceeding to MQTT connection.");
@@ -244,7 +242,7 @@ void wifi_task(void *arg) {
 
     
 
-    ESP_LOGI(TAG, "Remaining stack: %d bytes", uxTaskGetStackHighWaterMark(NULL));
+    ESP_LOGI(TAG, "Wifi task remaining stack: %d bytes", uxTaskGetStackHighWaterMark(NULL));
     for (;;) {
         vTaskDelay(1);
     }
@@ -252,7 +250,7 @@ void wifi_task(void *arg) {
 
 esp_err_t wifi_service(void) {
     BaseType_t xReturned;
-    xReturned = xTaskCreate(wifi_task, "wifi_task", 16000, NULL, 10, NULL);
+    xReturned = xTaskCreate(wifi_task, "wifi_task", 3 * 1024, NULL, 10, NULL);
     if (xReturned != pdPASS) {
         ESP_LOGE(TAG, "Failed to create Wi-Fi task");
         return ESP_FAIL;
